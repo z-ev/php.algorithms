@@ -1,0 +1,4 @@
+.env
+.idea/
+/public/access-nginx.log
+/public/error-nginx.log

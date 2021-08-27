@@ -1,0 +1,75 @@
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: ./docker/services/mysql/Dockerfile
+    image: ${DOCKER_PROJECT_NAME}_mysql
+    container_name: ${DOCKER_PROJECT_NAME}_mysql
+    networks:
+      - net
+    ports:
+      - '${DOCKER_MYSQL_PORT:-3306}:3306'
+    volumes:
+      - ./docker/services/mysql/conf/custom.cnf:/etc/mysql/custom.cnf
+      - ./docker/services/mysql/var/backups/sql:/var/backups/sql
+      # - ./docker/services/mysql/var/backups/sql/dump.sql:/docker-entrypoint-initdb.d/dump.sql
+      # - ./docker/services/mysql/var/lib/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=${DOCKER_PROJECT_NAME}
+      - MYSQL_ROOT_PASSWORD=${DOCKER_MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${DOCKER_MYSQL_USER}
+      - MYSQL_PASSWORD=${DOCKER_MYSQL_PASSWORD}
+
+  php:
+    build:
+      context: .
+      dockerfile: ./docker/services/php/Dockerfile
+    image: ${DOCKER_PROJECT_NAME}_php
+    container_name: ${DOCKER_PROJECT_NAME}_php
+    working_dir: ${DOCKER_PROJECT_PATCH}
+    networks:
+      - net
+    ports:
+    - '9001:9001'
+    volumes:
+      - ${DOCKER_PROJECT_ROOT}:${DOCKER_PROJECT_PATCH}
+      - ./docker/services/php/conf.d/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+      - ./docker/services/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+      - ./docker/scripts/php.sh:/scripts/php.sh
+    environment:
+      - PROJECT_PATCH=${DOCKER_PROJECT_PATCH}
+      - MYSQL_HOST=${DOCKER_PROJECT_NAME}_mysql
+    command: /scripts/php.sh
+    depends_on:
+      - mysql
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ./docker/services/nginx/Dockerfile
+    image: ${DOCKER_PROJECT_NAME}_nginx
+    container_name: ${DOCKER_PROJECT_NAME}_nginx
+    working_dir: ${DOCKER_PROJECT_PATCH}
+    networks:
+      - net
+    ports:
+      - '${DOCKER_NGINX_PORT:-80}:80'
+    volumes:
+      - ${DOCKER_PROJECT_ROOT}:${DOCKER_PROJECT_PATCH}
+      - ./docker/services/nginx/conf.d/${DOCKER_NGINX_CONFIG}:/etc/nginx/conf.d/docker.conf.template
+      - ./docker/scripts/nginx.sh:/scripts/nginx.sh
+    environment:
+      - PROJECT_PATCH=${DOCKER_PROJECT_PATCH}
+      - SERVER_NAME=${DOCKER_PROJECT_DOMAIN}
+      - ROOT=${DOCKER_NGINX_ROOT}
+      - CONFIG=${DOCKER_NGINX_CONFIG}
+      - PHP_HOST=${DOCKER_PROJECT_NAME}_php
+      - VIRTUAL_HOST=${DOCKER_PROJECT_DOMAIN}
+    command: /scripts/nginx.sh
+    depends_on:
+      - mysql
+      - php
+
+networks:
+  net:
+    driver: bridge
